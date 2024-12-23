@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const app = express();
 const port = process.env.PORT || 5000;
 require("dotenv").config();
@@ -25,7 +26,24 @@ async function run() {
     await client.connect();
     const serviceCollection = client.db("car-service").collection("services");
     const bookingCollection = client.db("car-service").collection("bookings");
+    // jwt
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
 
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      // set token to cookie
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          secure: false,
+          sameSite: "none",
+        })
+        .send({ success: true });
+    });
+
+    // Services related data
     app.get("/services", async (req, res) => {
       const result = await serviceCollection.find().toArray();
       res.send(result);
@@ -47,11 +65,9 @@ async function run() {
       const booking = req.body;
       const result = await bookingCollection.insertOne(booking);
       res.send(result);
-      console.log(booking);
     });
 
     app.get("/bookings", async (req, res) => {
-      console.log(req.query.email);
       let query = {};
       if (req.query?.email) {
         query = { email: req.query.email };
@@ -59,6 +75,27 @@ async function run() {
       const result = await bookingCollection.find(query).toArray();
       res.send(result);
     });
+
+    app.delete("/bookings/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bookingCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.patch("/bookings/:id", async (req, res) => {
+      const updatedData = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateInfo = {
+        $set: {
+          status: updatedData.status,
+        },
+      };
+      const result = await bookingCollection.updateOne(query, updateInfo);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
